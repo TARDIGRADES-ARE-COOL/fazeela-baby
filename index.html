@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Valentine 💖</title>
 
+    <!-- Preload hints (starts downloading ASAP) -->
+    <link rel="preload" as="image" href="photo1.jpg" />
+    <link rel="preload" as="image" href="photo2.jpg" />
+    <link rel="preload" as="image" href="photo3.jpg" />
+    <link rel="preload" as="image" href="photo4.jpg" />
+    <link rel="preload" as="image" href="photo5.jpg" />
+    <link rel="preload" as="image" href="photo6.jpg" />
+    <link rel="preload" as="image" href="photo7.jpg" />
+    <link rel="preload" as="image" href="photo8.jpg" />
+    <link rel="preload" as="image" href="photo9.jpg" />
+    <link rel="preload" as="image" href="photo10.jpg" />
+    <link rel="preload" as="image" href="photo11.jpg" />
+    <link rel="preload" as="image" href="photo12.jpg" />
+    <link rel="preload" as="image" href="photo13.jpg" />
+    <link rel="preload" as="image" href="photo14.jpg" />
+
     <style>
       body {
         margin: 0;
@@ -12,6 +28,33 @@
         overflow: hidden;
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         background: radial-gradient(circle, #fff0f3, #ffccd5);
+      }
+
+      /* loader */
+      #loader {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle, #fff0f3, #ffccd5);
+        text-align: center;
+      }
+      #loader .heart {
+        font-size: 3.2rem;
+      }
+      #loader .title {
+        margin-top: 10px;
+        font-size: 1.45rem;
+        font-weight: 900;
+        color: #c9184a;
+        letter-spacing: 0.2px;
+      }
+      #loader .sub {
+        margin-top: 10px;
+        color: #444;
       }
 
       .center {
@@ -109,6 +152,13 @@
   </head>
 
   <body>
+    <!-- Loading overlay -->
+    <div id="loader">
+      <div class="heart">💖</div>
+      <div class="title">Loading our memories…</div>
+      <div id="loadText" class="sub">0 / 14</div>
+    </div>
+
     <div class="center">
       <h1>Will you be my Valentine? 💕</h1>
       <div class="buttons">
@@ -121,16 +171,51 @@
 
     <script>
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
-      /* ---------------- PHOTOS ---------------- */
       const TOTAL_PHOTOS = 14;
+
       const container = document.getElementById("orbit-container");
       const photos = [];
       const photoSizes = [];
+
       let angle = 0;
       let isHeart = false;
-      let running = true;
+      let running = false; // start only after preload
       let rafId = null;
+
+      /* ---------------- PRELOAD ---------------- */
+      async function preloadPhotos() {
+        const loadText = document.getElementById("loadText");
+        let done = 0;
+
+        const promises = Array.from({ length: TOTAL_PHOTOS }, (_, i) => {
+          const src = `photo${i + 1}.jpg`;
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = img.onerror = () => {
+              done++;
+              if (loadText) loadText.textContent = `${done} / ${TOTAL_PHOTOS}`;
+              resolve();
+            };
+            img.src = src;
+          });
+        });
+
+        await Promise.all(promises);
+
+        const loader = document.getElementById("loader");
+        if (loader) loader.remove();
+      }
+
+      /* ---------------- CREATE PHOTOS ---------------- */
+      function createPhotos() {
+        for (let i = 0; i < TOTAL_PHOTOS; i++) {
+          const img = document.createElement("img");
+          img.src = `photo${i + 1}.jpg`;
+          img.className = "photo";
+          container.appendChild(img);
+          photos.push(img);
+        }
+      }
 
       function cachePhotoSizes() {
         photoSizes.length = 0;
@@ -139,20 +224,6 @@
           photoSizes.push({ w: r.width || 200, h: r.height || 200 });
         });
       }
-
-      for (let i = 0; i < TOTAL_PHOTOS; i++) {
-        const img = document.createElement("img");
-        img.src = `photo${i + 1}.jpg`;
-        img.className = "photo";
-        container.appendChild(img);
-        photos.push(img);
-
-        img.addEventListener("load", () => {
-          clearTimeout(window.__cacheTimer);
-          window.__cacheTimer = setTimeout(cachePhotoSizes, 60);
-        });
-      }
-      setTimeout(cachePhotoSizes, 150);
 
       function getLayout() {
         const minDim = Math.min(window.innerWidth, window.innerHeight);
@@ -193,7 +264,7 @@
       function animate() {
         if (!running || isHeart) return;
 
-        angle += 0.00065; // slow
+        angle += 0.00065; // slow orbit
         const cx = window.innerWidth / 2;
         const cy = window.innerHeight / 2;
         const layout = getLayout();
@@ -207,6 +278,7 @@
 
             const theta =
               angle + (i / ring.count) * Math.PI * 2 + ringIndex * 0.35;
+
             let x = cx + Math.cos(theta) * ring.r;
             let y = cy + Math.sin(theta) * ring.r;
 
@@ -233,15 +305,14 @@
 
         rafId = requestAnimationFrame(animate);
       }
-      setTimeout(() => {
-        rafId = requestAnimationFrame(animate);
-      }, 80);
 
       window.addEventListener("resize", () => {
+        if (!photos.length) return;
         cachePhotoSizes();
+        if (noRunner) requestAnimationFrame(clampRunnerToViewport);
       });
 
-      /* ---------------- NO RUNNER ---------------- */
+      /* ---------------- NO RUNNER (clone) ---------------- */
       const noOriginal = document.getElementById("no");
       let noRunner = null;
 
@@ -249,6 +320,7 @@
       const DODGE_DISTANCE = 210;
       const COOLDOWN = 110;
       const STEP = 220;
+
       const EDGE_PAD = 18;
       const R_MIN = 140;
       const R_MAX = 380;
@@ -400,15 +472,9 @@
         stepRunAway();
       });
 
-      window.addEventListener("resize", () => {
-        requestAnimationFrame(() => {
-          if (noRunner) clampRunnerToViewport();
-        });
-      });
-
-      /* ---------------- YES FINALE (NO GLITCH VERSION) ---------------- */
+      /* ---------------- YES (freeze -> heart, no glitch) ---------------- */
       document.getElementById("yes").onclick = () => {
-        // Hide/remove NO immediately
+        // hide NO immediately
         noOriginal.style.opacity = "0";
         noOriginal.style.pointerEvents = "none";
         noOriginal.style.visibility = "hidden";
@@ -420,18 +486,17 @@
           }, 220);
         }
 
-        // Stop orbit loop instantly
+        // stop orbit
         running = false;
         isHeart = true;
         if (rafId) cancelAnimationFrame(rafId);
 
-        // FREEZE STEP:
-        // lock each photo to its *current* screen position + current computed transform
+        // freeze photos to current position + computed transform
         photos.forEach((img) => {
           const rect = img.getBoundingClientRect();
           const cx = rect.left + rect.width / 2;
           const cy = rect.top + rect.height / 2;
-          const tf = getComputedStyle(img).transform; // capture current transform
+          const tf = getComputedStyle(img).transform;
 
           img.style.transition = "none";
           img.style.left = cx + "px";
@@ -439,13 +504,12 @@
           img.style.transform =
             tf && tf !== "none" ? tf : "translate(-50%, -50%)";
         });
-
-        // Force reflow so Chrome commits "frozen" state (kills the jump)
+        // force reflow
         photos.forEach((img) => {
           void img.offsetHeight;
         });
 
-        // Now animate into heart on the next frame (double RAF is extra safe)
+        // animate into heart (double RAF)
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             const cx = window.innerWidth / 2;
@@ -461,7 +525,11 @@
                 Math.cos(4 * t);
 
               img.style.transition =
-                "left 1.15s cubic-bezier(0.175,0.885,0.32,1.275), top 1.15s cubic-bezier(0.175,0.885,0.32,1.275), transform 1.15s cubic-bezier(0.175,0.885,0.32,1.275), filter 1.15s ease";
+                "left 1.15s cubic-bezier(0.175,0.885,0.32,1.275), " +
+                "top 1.15s cubic-bezier(0.175,0.885,0.32,1.275), " +
+                "transform 1.15s cubic-bezier(0.175,0.885,0.32,1.275), " +
+                "filter 1.15s ease";
+
               img.style.left = cx + x * 26 + "px";
               img.style.top = cy - y * 26 + "px";
               img.style.transform =
@@ -477,8 +545,8 @@
               <div style="position:fixed; inset:0; background:rgba(255,240,245,0.98); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; text-align:center; animation: fadeIn 1s ease forwards;">
                 <h1 style="font-size: 6rem; margin:0;">💖</h1>
                 <h2 style="font-size: 3.2rem; color:#ff4d6d; margin:12px 0;">Love You Fazeela Baby!</h2>
-                <p style="font-size: 1.7rem; color:#444;">You're stuck with me now!</p>
-                <p style="font-size: 1.2rem; color:#999; margin-top:18px;">Happy Valentines Day💕</p>
+                <p style="font-size: 1.7rem; color:#444;">You're stuck with me</p>
+                <p style="font-size: 1.2rem; color:#999; margin-top:18px;">Happy Valentines Day Baby💕</p>
               </div>
               <style>@keyframes fadeIn{from{opacity:0}to{opacity:1}}</style>
             `,
@@ -487,6 +555,19 @@
           });
         });
       };
+
+      /* ---------------- START AFTER PRELOAD ---------------- */
+      (async function boot() {
+        await preloadPhotos();
+        createPhotos();
+
+        // wait a tick so the DOM lays out images, then cache sizes + start orbit
+        requestAnimationFrame(() => {
+          cachePhotoSizes();
+          running = true;
+          rafId = requestAnimationFrame(animate);
+        });
+      })();
     </script>
   </body>
 </html>
