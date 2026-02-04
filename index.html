@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Valentine 💖</title>
+
+    <style>
+      body {
+        margin: 0;
+        height: 100vh;
+        overflow: hidden;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: radial-gradient(circle, #fff0f3, #ffccd5);
+      }
+
+      .center {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        z-index: 50;
+        padding: 20px;
+        pointer-events: none;
+      }
+
+      .center h1 {
+        margin: 0 0 20px 0;
+        color: #c9184a;
+        font-size: clamp(2rem, 6vw, 3.5rem);
+        text-shadow: 2px 2px 10px rgba(255, 255, 255, 0.85);
+        background: rgba(255, 255, 255, 0.12);
+        padding: 10px 18px;
+        border-radius: 18px;
+      }
+
+      .buttons {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        pointer-events: auto;
+        position: relative;
+        z-index: 999;
+      }
+
+      button {
+        padding: 16px 34px;
+        font-size: 22px;
+        font-weight: 800;
+        border: none;
+        border-radius: 999px;
+        cursor: pointer;
+        user-select: none;
+        touch-action: manipulation;
+        transition:
+          transform 0.15s ease,
+          opacity 0.25s ease;
+      }
+      button:active {
+        transform: scale(0.98);
+      }
+
+      #yes {
+        background: #ff4d6d;
+        color: #fff;
+        box-shadow: 0 10px 25px rgba(255, 77, 109, 0.35);
+      }
+
+      #no {
+        background: #8e9aaf;
+        color: #fff;
+        z-index: 999;
+      }
+
+      .no-runner {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 999999;
+        background: #8e9aaf;
+        color: #fff;
+        transition:
+          left 140ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
+          top 140ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
+          box-shadow 200ms ease,
+          opacity 220ms ease;
+      }
+
+      #orbit-container {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .photo {
+        position: fixed;
+        border: 10px solid white;
+        border-radius: 18px;
+        box-shadow: 0 16px 45px rgba(0, 0, 0, 0.2);
+        transform: translate(-50%, -50%);
+        width: clamp(150px, 20vmin, 240px);
+        height: auto;
+        object-fit: cover;
+        will-change: left, top, transform;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="center">
+      <h1>Will you be my Valentine? 💕</h1>
+      <div class="buttons">
+        <button id="yes">Yes 💘</button>
+        <button id="no">No 💔</button>
+      </div>
+    </div>
+
+    <div id="orbit-container"></div>
+
+    <script>
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+      /* ---------------- PHOTOS ---------------- */
+      const TOTAL_PHOTOS = 14;
+      const container = document.getElementById("orbit-container");
+      const photos = [];
+      const photoSizes = [];
+      let angle = 0;
+      let isHeart = false;
+      let running = true;
+      let rafId = null;
+
+      function cachePhotoSizes() {
+        photoSizes.length = 0;
+        photos.forEach((img) => {
+          const r = img.getBoundingClientRect();
+          photoSizes.push({ w: r.width || 200, h: r.height || 200 });
+        });
+      }
+
+      for (let i = 0; i < TOTAL_PHOTOS; i++) {
+        const img = document.createElement("img");
+        img.src = `photo${i + 1}.jpg`;
+        img.className = "photo";
+        container.appendChild(img);
+        photos.push(img);
+
+        img.addEventListener("load", () => {
+          clearTimeout(window.__cacheTimer);
+          window.__cacheTimer = setTimeout(cachePhotoSizes, 60);
+        });
+      }
+      setTimeout(cachePhotoSizes, 150);
+
+      function getLayout() {
+        const minDim = Math.min(window.innerWidth, window.innerHeight);
+        const centerHole = minDim * 0.18;
+
+        const w = photoSizes[0]?.w || 200;
+        const gap = 80;
+
+        const requiredR = (TOTAL_PHOTOS * (w + gap)) / (Math.PI * 2);
+        const maxSingleRingR = minDim * 0.34;
+
+        if (requiredR <= maxSingleRingR) {
+          return {
+            rings: [
+              { count: TOTAL_PHOTOS, r: Math.max(requiredR, centerHole + 160) },
+            ],
+          };
+        }
+
+        const n1 = Math.ceil(TOTAL_PHOTOS / 2);
+        const n2 = TOTAL_PHOTOS - n1;
+
+        const requiredR1 = (n1 * (w + gap)) / (Math.PI * 2);
+        const requiredR2 = (n2 * (w + gap)) / (Math.PI * 2);
+
+        const base = Math.max(centerHole + 160, minDim * 0.22);
+        const r1 = Math.max(base, requiredR1);
+        const r2 = Math.max(r1 + w * 1.05, requiredR2);
+
+        return {
+          rings: [
+            { count: n1, r: r1 },
+            { count: n2, r: r2 },
+          ],
+        };
+      }
+
+      function animate() {
+        if (!running || isHeart) return;
+
+        angle += 0.00065; // slow
+        const cx = window.innerWidth / 2;
+        const cy = window.innerHeight / 2;
+        const layout = getLayout();
+
+        let idx = 0;
+        layout.rings.forEach((ring, ringIndex) => {
+          for (let i = 0; i < ring.count; i++) {
+            const img = photos[idx];
+            const size = photoSizes[idx] || { w: 200, h: 200 };
+            idx++;
+
+            const theta =
+              angle + (i / ring.count) * Math.PI * 2 + ringIndex * 0.35;
+            let x = cx + Math.cos(theta) * ring.r;
+            let y = cy + Math.sin(theta) * ring.r;
+
+            const pad = 20;
+            x = clamp(
+              x,
+              pad + size.w / 2,
+              window.innerWidth - pad - size.w / 2,
+            );
+            y = clamp(
+              y,
+              pad + size.h / 2,
+              window.innerHeight - pad - size.h / 2,
+            );
+
+            const tilt = Math.sin(angle * 2 + i + ringIndex * 3) * 6;
+
+            img.style.left = x + "px";
+            img.style.top = y + "px";
+            img.style.transform = `translate(-50%, -50%) rotate(${tilt}deg)`;
+            img.style.zIndex = 20 + ringIndex;
+          }
+        });
+
+        rafId = requestAnimationFrame(animate);
+      }
+      setTimeout(() => {
+        rafId = requestAnimationFrame(animate);
+      }, 80);
+
+      window.addEventListener("resize", () => {
+        cachePhotoSizes();
+      });
+
+      /* ---------------- NO RUNNER ---------------- */
+      const noOriginal = document.getElementById("no");
+      let noRunner = null;
+
+      const GRACE_MS = 800;
+      const DODGE_DISTANCE = 210;
+      const COOLDOWN = 110;
+      const STEP = 220;
+      const EDGE_PAD = 18;
+      const R_MIN = 140;
+      const R_MAX = 380;
+
+      const startTime = Date.now();
+      let lastMove = 0;
+
+      let mouseX = window.innerWidth / 2,
+        mouseY = window.innerHeight / 2;
+      document.addEventListener("mousemove", (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+      });
+
+      function ensureRunner() {
+        if (noRunner) return noRunner;
+
+        const r = noOriginal.getBoundingClientRect();
+        noRunner = noOriginal.cloneNode(true);
+        noRunner.classList.add("no-runner");
+        noRunner.removeAttribute("id");
+        document.body.appendChild(noRunner);
+
+        noRunner.style.left = r.left + "px";
+        noRunner.style.top = r.top + "px";
+
+        noOriginal.style.visibility = "hidden";
+
+        noRunner.addEventListener("touchstart", (e) => {
+          if (Date.now() - startTime < GRACE_MS) return;
+          e.preventDefault();
+          const t = e.touches[0];
+          if (t) {
+            mouseX = t.clientX;
+            mouseY = t.clientY;
+          }
+          stepRunAway();
+        });
+
+        requestAnimationFrame(clampRunnerToViewport);
+        return noRunner;
+      }
+
+      function clampRunnerToViewport() {
+        if (!noRunner) return;
+
+        const r = noRunner.getBoundingClientRect();
+        const bw = r.width || 160;
+        const bh = r.height || 70;
+
+        const minX = EDGE_PAD;
+        const minY = EDGE_PAD;
+        const maxX = Math.max(minX, window.innerWidth - bw - EDGE_PAD);
+        const maxY = Math.max(minY, window.innerHeight - bh - EDGE_PAD);
+
+        let left = parseFloat(noRunner.style.left);
+        let top = parseFloat(noRunner.style.top);
+        if (Number.isNaN(left)) left = r.left;
+        if (Number.isNaN(top)) top = r.top;
+
+        noRunner.style.left = clamp(left, minX, maxX) + "px";
+        noRunner.style.top = clamp(top, minY, maxY) + "px";
+      }
+
+      function keepInCenterRing(centerX, centerY) {
+        const cx = window.innerWidth / 2;
+        const cy = window.innerHeight / 2;
+
+        let vx = centerX - cx;
+        let vy = centerY - cy;
+
+        let d = Math.hypot(vx, vy);
+        if (d < 0.001) {
+          vx = 1;
+          vy = 0;
+          d = 1;
+        }
+
+        const rr = clamp(d, R_MIN, R_MAX);
+        vx /= d;
+        vy /= d;
+
+        return { x: cx + vx * rr, y: cy + vy * rr };
+      }
+
+      function stepRunAway() {
+        const now = Date.now();
+        if (now - lastMove < COOLDOWN) return;
+        lastMove = now;
+
+        const btn = ensureRunner();
+        const r = btn.getBoundingClientRect();
+        const bw = r.width || 160;
+        const bh = r.height || 70;
+
+        const bx = r.left + bw / 2;
+        const by = r.top + bh / 2;
+
+        let dx = bx - mouseX;
+        let dy = by - mouseY;
+        const len = Math.hypot(dx, dy) || 1;
+        dx /= len;
+        dy /= len;
+
+        let targetCX = bx + dx * STEP;
+        let targetCY = by + dy * STEP;
+
+        const ring = keepInCenterRing(targetCX, targetCY);
+        targetCX = ring.x;
+        targetCY = ring.y;
+
+        const minX = EDGE_PAD;
+        const minY = EDGE_PAD;
+        const maxX = Math.max(minX, window.innerWidth - bw - EDGE_PAD);
+        const maxY = Math.max(minY, window.innerHeight - bh - EDGE_PAD);
+
+        btn.style.left = clamp(targetCX - bw / 2, minX, maxX) + "px";
+        btn.style.top = clamp(targetCY - bh / 2, minY, maxY) + "px";
+
+        requestAnimationFrame(clampRunnerToViewport);
+
+        btn.style.boxShadow =
+          "0 0 0 6px rgba(255,255,255,0.35), 0 12px 25px rgba(0,0,0,0.15)";
+        setTimeout(() => {
+          btn.style.boxShadow = "";
+        }, 200);
+      }
+
+      function runnerRect() {
+        const btn = noRunner || noOriginal;
+        return btn.getBoundingClientRect();
+      }
+
+      function checkDodge(x, y) {
+        const r = runnerRect();
+        const bx = r.left + r.width / 2;
+        const by = r.top + r.height / 2;
+        const d = Math.hypot(x - bx, y - by);
+        if (d < DODGE_DISTANCE) stepRunAway();
+      }
+
+      document.addEventListener("mousemove", (e) => {
+        if (Date.now() - startTime < GRACE_MS) return;
+        checkDodge(e.clientX, e.clientY);
+      });
+
+      noOriginal.addEventListener("mouseenter", () => {
+        if (Date.now() - startTime < GRACE_MS) return;
+        stepRunAway();
+      });
+
+      window.addEventListener("resize", () => {
+        requestAnimationFrame(() => {
+          if (noRunner) clampRunnerToViewport();
+        });
+      });
+
+      /* ---------------- YES FINALE (NO GLITCH VERSION) ---------------- */
+      document.getElementById("yes").onclick = () => {
+        // Hide/remove NO immediately
+        noOriginal.style.opacity = "0";
+        noOriginal.style.pointerEvents = "none";
+        noOriginal.style.visibility = "hidden";
+        if (noRunner) {
+          noRunner.style.opacity = "0";
+          noRunner.style.pointerEvents = "none";
+          setTimeout(() => {
+            if (noRunner) noRunner.remove();
+          }, 220);
+        }
+
+        // Stop orbit loop instantly
+        running = false;
+        isHeart = true;
+        if (rafId) cancelAnimationFrame(rafId);
+
+        // FREEZE STEP:
+        // lock each photo to its *current* screen position + current computed transform
+        photos.forEach((img) => {
+          const rect = img.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const tf = getComputedStyle(img).transform; // capture current transform
+
+          img.style.transition = "none";
+          img.style.left = cx + "px";
+          img.style.top = cy + "px";
+          img.style.transform =
+            tf && tf !== "none" ? tf : "translate(-50%, -50%)";
+        });
+
+        // Force reflow so Chrome commits "frozen" state (kills the jump)
+        photos.forEach((img) => {
+          void img.offsetHeight;
+        });
+
+        // Now animate into heart on the next frame (double RAF is extra safe)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+
+            photos.forEach((img, i) => {
+              const t = (i / photos.length) * Math.PI * 2;
+              const x = 16 * Math.pow(Math.sin(t), 3);
+              const y =
+                13 * Math.cos(t) -
+                5 * Math.cos(2 * t) -
+                2 * Math.cos(3 * t) -
+                Math.cos(4 * t);
+
+              img.style.transition =
+                "left 1.15s cubic-bezier(0.175,0.885,0.32,1.275), top 1.15s cubic-bezier(0.175,0.885,0.32,1.275), transform 1.15s cubic-bezier(0.175,0.885,0.32,1.275), filter 1.15s ease";
+              img.style.left = cx + x * 26 + "px";
+              img.style.top = cy - y * 26 + "px";
+              img.style.transform =
+                "translate(-50%, -50%) rotate(0deg) scale(1.08)";
+              img.style.zIndex = "200";
+              img.style.filter = "drop-shadow(0 0 30px rgba(255,77,109,0.8))";
+            });
+
+            setTimeout(() => {
+              document.body.insertAdjacentHTML(
+                "beforeend",
+                `
+              <div style="position:fixed; inset:0; background:rgba(255,240,245,0.98); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; text-align:center; animation: fadeIn 1s ease forwards;">
+                <h1 style="font-size: 6rem; margin:0;">💖</h1>
+                <h2 style="font-size: 3.2rem; color:#ff4d6d; margin:12px 0;">Love You Fazeela Baby!</h2>
+                <p style="font-size: 1.7rem; color:#444;">You're stuck with me now!</p>
+                <p style="font-size: 1.2rem; color:#999; margin-top:18px;">Happy Valentines Day💕</p>
+              </div>
+              <style>@keyframes fadeIn{from{opacity:0}to{opacity:1}}</style>
+            `,
+              );
+            }, 1200);
+          });
+        });
+      };
+    </script>
+  </body>
+</html>
